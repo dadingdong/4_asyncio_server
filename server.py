@@ -1,31 +1,34 @@
 import asyncio
 
-HOST = 'localhost'
-PORT = 9095
-
 
 async def handle_echo(reader, writer):
-    data = await reader.read(100)
-    message = data.decode()
+    addr = writer.get_extra_info('peername')
 
-    writer.write(data)
-    await writer.drain()
+    while True:
+        data = await reader.read(100)
+        message = data.decode()
+        print(f'{addr!r} >> {message!r}')
 
-    writer.close()
+        if message == 'exit':
+            writer.close()
+            print(f'{addr!r} -- DISCONNECTED')
+            break
+
+        message_new = f'{message!r} — back to you!'
+        writer.write(message_new.encode())
+        await writer.drain()
+        print(f'{addr!r} << {message_new!r}')
 
 
-loop = asyncio.get_event_loop()
-coro = asyncio.start_server(handle_echo, HOST, PORT, loop=loop)
-server = loop.run_until_complete(coro)
+async def main():
+    server = await asyncio.start_server(
+        handle_echo, '127.0.0.1', 9095)
 
-# Serve requests until Ctrl+C is pressed
-print('Serving on {}'.format(server.sockets[0].getsockname()))
-try:
-    loop.run_forever()
-except KeyboardInterrupt:
-    pass
+    addr = server.sockets[0].getsockname()
+    print(f'Serving on {addr}')
 
-# Close the server
-server.close()
-loop.run_until_complete(server.wait_closed())
-loop.close()
+    async with server:
+        await server.serve_forever()
+
+
+asyncio.run(main())
